@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
+    "@types/geoip-lite": "^1.4.4",
     "autoprefixer": "^10.4.20",
     "geoip-lite": "^1.4.10",
     "next": "^15.2.0",

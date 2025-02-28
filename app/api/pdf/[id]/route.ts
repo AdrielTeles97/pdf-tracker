@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import geoip from 'geoip-lite';
 
 // Configuração do Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,16 +11,41 @@ if (!supabaseUrl || !supabaseKey) {
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Função para obter informações de localização
+function getLocationInfo(ip: string) {
+    const geo = geoip.lookup(ip);
+    return geo ? {
+        country: geo.country,
+        city: geo.city,
+        latitude: geo.ll[0],
+        longitude: geo.ll[1]
+    } : {
+        country: null,
+        city: null,
+        latitude: null,
+        longitude: null
+    };
+}
+
 export async function GET(
-    request: NextRequest,
-    context: { params: { id: string } }
+    request: NextRequest, 
+    { params }: { params: { id: string } }
 ) {
     try {
-        const id = context.params.id;
+        const id = params.id;
 
         if (!id) {
             return NextResponse.json({ error: 'ID do documento é obrigatório' }, { status: 400 });
         }
+
+        // Obter IP do cliente
+        const ip = 
+            request.headers.get('x-forwarded-for')?.split(',')[0] || 
+            request.headers.get('x-real-ip') || 
+            '127.0.0.1';
+
+        // Obter informações de localização
+        const locationInfo = getLocationInfo(ip);
 
         // Buscar informações do documento
         const { data: document, error } = await supabase
@@ -31,6 +57,21 @@ export async function GET(
         if (error || !document) {
             return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 });
         }
+
+        // Registrar download
+        await supabase
+            .from('document_access_logs')
+            .insert({
+                document_id: id,
+                ip_address: ip,
+                user_agent: request.headers.get('user-agent') || '',
+                referrer: request.headers.get('referer') || '',
+                country: locationInfo.country,
+                city: locationInfo.city,
+                latitude: locationInfo.latitude,
+                longitude: locationInfo.longitude,
+                access_type: 'download'
+            });
 
         // Criar PDF usando pdf-lib
         const pdfDoc = await PDFDocument.create();
@@ -89,7 +130,7 @@ export async function GET(
         });
 
         // Link de rastreamento (texto)
-        const trackingUrlText = 'Clique aqui para verificar a versão mais recente deste documento';
+        const trackingUrlText = `Link de Rastreamento: https://pdf-tracker-navy.vercel.app/api/track/${id}`;
         page.drawText(trackingUrlText, {
             x: 50,
             y: 100,
@@ -99,7 +140,7 @@ export async function GET(
         });
 
         // Rodapé
-        page.drawText(`ID de Rastreamento: ${document.tracking_id}`, {
+        page.drawText(`ID de Rastreamento: ${id}`, {
             x: 50,
             y: 50,
             size: 8,
