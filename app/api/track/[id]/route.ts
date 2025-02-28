@@ -9,30 +9,79 @@ if (!supabaseUrl || !supabaseKey) {
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Função para extrair IP do cliente
+function extractClientIP(request: NextRequest): string {
+    // Lista de possíveis cabeçalhos de IP
+    const ipHeaders = [
+        'x-forwarded-for',
+        'x-real-ip',
+        'cf-connecting-ip',
+        'x-client-ip',
+        'x-forwarded',
+        'forwarded-for',
+        'forwarded'
+    ];
+
+    // Tenta obter o IP de diferentes cabeçalhos
+    for (const header of ipHeaders) {
+        const value = request.headers.get(header);
+        if (value) {
+            // Se for uma lista de IPs, pega o primeiro
+            return value.split(',')[0].trim();
+        }
+    }
+
+    // Fallback para localhost se nenhum IP for encontrado
+    return '127.0.0.1';
+}
+
 // Função para obter informações de localização
 async function getLocationInfo(ip: string) {
+    // Se for IP localhost, retorna informações padrão
+    if (ip === '127.0.0.1') {
+        return {
+            country: 'Desconhecido',
+            city: 'Localhost',
+            latitude: null,
+            longitude: null
+        };
+    }
+
     try {
-        const response = await fetch(`https://ipapi.co/${ip}/json/`);
+        // Tenta primeiro o ipapi.co
+        const response = await fetch(`https://ipapi.co/${ip}/json/`, { 
+            headers: {
+                'User-Agent': 'PDFTracker/1.0'
+            }
+        });
+
         if (!response.ok) {
+            // Se falhar, tenta um serviço alternativo
+            const backupResponse = await fetch(`https://ip-api.com/json/${ip}`);
+            if (!backupResponse.ok) {
+                throw new Error('Falha na obtenção de localização');
+            }
+            const backupData = await backupResponse.json();
             return {
-                country: null,
-                city: null,
-                latitude: null,
-                longitude: null
+                country: backupData.country || 'Desconhecido',
+                city: backupData.city || 'Não identificada',
+                latitude: backupData.lat || null,
+                longitude: backupData.lon || null
             };
         }
+
         const data = await response.json();
         return {
-            country: data.country_name || null,
-            city: data.city || null,
+            country: data.country_name || 'Desconhecido',
+            city: data.city || 'Não identificada',
             latitude: data.latitude || null,
             longitude: data.longitude || null
         };
     } catch (error) {
         console.error('Erro ao obter localização:', error);
         return {
-            country: null,
-            city: null,
+            country: 'Desconhecido',
+            city: 'Não identificada',
             latitude: null,
             longitude: null
         };
@@ -40,7 +89,7 @@ async function getLocationInfo(ip: string) {
 }
 
 export async function GET(
-    request: NextRequest,
+    request: NextRequest, 
     { params }: { params: { id: string } }
 ) {
     try {
@@ -50,14 +99,17 @@ export async function GET(
             return NextResponse.json({ error: 'ID do documento é obrigatório' }, { status: 400 });
         }
 
-        // Obter IP do cliente
-        const ip =
-            request.headers.get('x-forwarded-for')?.split(',')[0] ||
-            request.headers.get('x-real-ip') ||
-            '127.0.0.1';
+        // Extrair IP do cliente
+        const ip = extractClientIP(request);
+
+        // Log para depuração
+        console.log('IP extraído:', ip);
 
         // Obter informações de localização
         const locationInfo = await getLocationInfo(ip);
+
+        // Log para depuração
+        console.log('Informações de localização:', locationInfo);
 
         // Buscar informações do documento
         const { data: document, error } = await supabase
@@ -71,7 +123,7 @@ export async function GET(
         }
 
         // Registrar acesso
-        await supabase
+        const { error: logError } = await supabase
             .from('document_access_logs')
             .insert({
                 document_id: id,
@@ -82,8 +134,13 @@ export async function GET(
                 city: locationInfo.city,
                 latitude: locationInfo.latitude,
                 longitude: locationInfo.longitude,
-                access_type: 'view'
+                access_type: 'visualizar'
             });
+
+        // Log de erro de registro
+        if (logError) {
+            console.error('Erro ao registrar log:', logError);
+        }
 
         // Renderizar página de rastreamento
         return new NextResponse(`
@@ -112,7 +169,7 @@ export async function GET(
 
                     <div class="bg-green-50 p-4 rounded">
                         <h2 class="font-semibold text-green-800">Localização</h2>
-                        <p class="text-green-600">${locationInfo.city || 'Localização não identificada'}, ${locationInfo.country || ''}</p>
+                        <p class="text-green-600">${locationInfo.city}, ${locationInfo.country}</p>
                     </div>
                 </div>
                 
