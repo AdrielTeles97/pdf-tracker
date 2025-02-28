@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { RouteHandler, RouteParams } from './types'; // Adjust import path as needed
 
 // Configuração do Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,12 +10,12 @@ if (!supabaseUrl || !supabaseKey) {
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export const GET: RouteHandler = async (
+export async function GET(
     request: NextRequest,
-    { params }: RouteParams
-) => {
+    context: { params: { id: string } }
+) {
     try {
-        const id = params.id;
+        const id = context.params.id;
 
         if (!id) {
             return NextResponse.json({ error: 'ID do documento é obrigatório' }, { status: 400 });
@@ -123,4 +122,4 @@ export const GET: RouteHandler = async (
         console.error('Erro ao gerar PDF:', error);
         return NextResponse.json({ error: 'Erro ao gerar PDF' }, { status: 500 });
     }
-};
+}
