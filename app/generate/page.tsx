@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -25,6 +26,9 @@ export default function GeneratePage() {
         setError(null);
 
         try {
+            // Generate a unique tracking ID
+            const tracking_id = uuidv4();
+
             // Registrar o documento no Supabase
             const { data, error } = await supabase
                 .from('documents')
@@ -32,23 +36,21 @@ export default function GeneratePage() {
                     title: title,
                     recipient_name: recipient,
                     recipient_email: email,
+                    tracking_id: tracking_id // Explicitly set the tracking ID
                 })
                 .select()
                 .single();
 
             if (error) throw error;
 
-            // Simulando a geração do PDF
-            // Em um caso real, você chamaria uma API para gerar o PDF
-            setTimeout(() => {
-                setResult({
-                    tracking_id: data.tracking_id,
-                    title: data.title,
-                    tracking_url: `${BASE_URL}/api/track/${data.tracking_id}`,
-                    download_url: `${BASE_URL}/api/pdf/${data.tracking_id}`
-                });
-                setLoading(false);
-            }, 1500);
+            // Immediately set the result with the generated tracking ID
+            setResult({
+                tracking_id: tracking_id,
+                title: title,
+                tracking_url: `${BASE_URL}/api/track/${tracking_id}`,
+                download_url: `${BASE_URL}/api/pdf/${tracking_id}`
+            });
+            setLoading(false);
 
         } catch (err) {
             console.error('Erro:', err);
