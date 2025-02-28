@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import geoip from 'geoip-lite';
 
 // Configuração do Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,19 +10,33 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Função para obter informações de localização
-function getLocationInfo(ip: string) {
-    const geo = geoip.lookup(ip);
-    return geo ? {
-        country: geo.country,
-        city: geo.city,
-        latitude: geo.ll[0],
-        longitude: geo.ll[1]
-    } : {
-        country: null,
-        city: null,
-        latitude: null,
-        longitude: null
-    };
+async function getLocationInfo(ip: string) {
+    try {
+        const response = await fetch(`https://ipapi.co/${ip}/json/`);
+        if (!response.ok) {
+            return {
+                country: null,
+                city: null,
+                latitude: null,
+                longitude: null
+            };
+        }
+        const data = await response.json();
+        return {
+            country: data.country_name || null,
+            city: data.city || null,
+            latitude: data.latitude || null,
+            longitude: data.longitude || null
+        };
+    } catch (error) {
+        console.error('Erro ao obter localização:', error);
+        return {
+            country: null,
+            city: null,
+            latitude: null,
+            longitude: null
+        };
+    }
 }
 
 export async function GET(
@@ -44,7 +57,18 @@ export async function GET(
             '127.0.0.1';
 
         // Obter informações de localização
-        const locationInfo = getLocationInfo(ip);
+        const locationInfo = await getLocationInfo(ip);
+
+        // Buscar informações do documento
+        const { data: document, error } = await supabase
+            .from('documents')
+            .select('*')
+            .eq('tracking_id', id)
+            .single();
+
+        if (error || !document) {
+            return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 });
+        }
 
         // Registrar acesso
         await supabase
@@ -60,17 +84,6 @@ export async function GET(
                 longitude: locationInfo.longitude,
                 access_type: 'view'
             });
-
-        // Buscar informações do documento
-        const { data: document, error } = await supabase
-            .from('documents')
-            .select('*')
-            .eq('tracking_id', id)
-            .single();
-
-        if (error || !document) {
-            return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 });
-        }
 
         // Renderizar página de rastreamento
         return new NextResponse(`
@@ -95,6 +108,11 @@ export async function GET(
                     <div class="bg-blue-50 p-4 rounded">
                         <h2 class="font-semibold text-blue-800">Status</h2>
                         <p class="text-blue-600">Documento visualizado e rastreado</p>
+                    </div>
+
+                    <div class="bg-green-50 p-4 rounded">
+                        <h2 class="font-semibold text-green-800">Localização</h2>
+                        <p class="text-green-600">${locationInfo.city || 'Localização não identificada'}, ${locationInfo.country || ''}</p>
                     </div>
                 </div>
                 

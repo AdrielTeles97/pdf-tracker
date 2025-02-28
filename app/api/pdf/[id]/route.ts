@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import geoip from 'geoip-lite';
+import { v4 as uuidv4 } from 'uuid';
 
 // Configuração do Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,23 +12,37 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Função para obter informações de localização
-function getLocationInfo(ip: string) {
-    const geo = geoip.lookup(ip);
-    return geo ? {
-        country: geo.country,
-        city: geo.city,
-        latitude: geo.ll[0],
-        longitude: geo.ll[1]
-    } : {
-        country: null,
-        city: null,
-        latitude: null,
-        longitude: null
-    };
+async function getLocationInfo(ip: string) {
+    try {
+        const response = await fetch(`https://ipapi.co/${ip}/json/`);
+        if (!response.ok) {
+            return {
+                country: null,
+                city: null,
+                latitude: null,
+                longitude: null
+            };
+        }
+        const data = await response.json();
+        return {
+            country: data.country_name || null,
+            city: data.city || null,
+            latitude: data.latitude || null,
+            longitude: data.longitude || null
+        };
+    } catch (error) {
+        console.error('Erro ao obter localização:', error);
+        return {
+            country: null,
+            city: null,
+            latitude: null,
+            longitude: null
+        };
+    }
 }
 
 export async function GET(
-    request: NextRequest, 
+    request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {
@@ -39,13 +53,13 @@ export async function GET(
         }
 
         // Obter IP do cliente
-        const ip = 
-            request.headers.get('x-forwarded-for')?.split(',')[0] || 
-            request.headers.get('x-real-ip') || 
+        const ip =
+            request.headers.get('x-forwarded-for')?.split(',')[0] ||
+            request.headers.get('x-real-ip') ||
             '127.0.0.1';
 
         // Obter informações de localização
-        const locationInfo = getLocationInfo(ip);
+        const locationInfo = await getLocationInfo(ip);
 
         // Buscar informações do documento
         const { data: document, error } = await supabase
