@@ -36,7 +36,7 @@ export async function GET(request, { params }) {
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
         // Definir conteúdo
-        const { width, height } = page.getSize();
+        const { height } = page.getSize();
 
         // Título
         page.drawText(document.title, {

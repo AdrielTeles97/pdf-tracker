@@ -3,18 +3,37 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import Link from 'next/link';
 
 // Crie um cliente Supabase para o lado do cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase URL or anonymous key');
+}
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function Home() {
-  const [documents, setDocuments] = useState([]);
+  interface Document {
+    tracking_id: string;
+    title: string;
+    recipient_name: string;
+    access_count: number;
+    last_access: string;
+  }
+
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDocument, setSelectedDocument] = useState(null);
-  const [accesses, setAccesses] = useState([]);
+  const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+  interface Access {
+    id: string;
+    timestamp: string;
+    ip_address: string;
+    city?: string;
+    country?: string;
+    user_agent?: string;
+  }
+
+  const [accesses, setAccesses] = useState<Access[]>([]);
 
   // Carregar lista de documentos
   useEffect(() => {
@@ -48,7 +67,7 @@ export default function Home() {
   }, []);
 
   // Carregar acessos para um documento específico
-  async function loadDocumentAccesses(trackingId) {
+  async function loadDocumentAccesses(trackingId: string) {
     try {
       setSelectedDocument(trackingId);
 
@@ -66,7 +85,7 @@ export default function Home() {
   }
 
   // Formatar data
-  function formatDate(dateString) {
+  function formatDate(dateString: string | number | Date) {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString();
   }
@@ -99,7 +118,7 @@ export default function Home() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {documents.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
                       Nenhum documento encontrado
                     </td>
                   </tr>
