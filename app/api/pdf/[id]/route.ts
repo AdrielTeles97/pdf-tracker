@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { v4 as uuidv4 } from 'uuid';
 
 // Configuração do Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,7 +12,6 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Função para extrair IP do cliente
 function extractClientIP(request: NextRequest): string {
-    // Lista de possíveis cabeçalhos de IP
     const ipHeaders = [
         'x-forwarded-for',
         'x-real-ip',
@@ -24,22 +22,18 @@ function extractClientIP(request: NextRequest): string {
         'forwarded'
     ];
 
-    // Tenta obter o IP de diferentes cabeçalhos
     for (const header of ipHeaders) {
         const value = request.headers.get(header);
         if (value) {
-            // Se for uma lista de IPs, pega o primeiro
             return value.split(',')[0].trim();
         }
     }
 
-    // Fallback para localhost se nenhum IP for encontrado
     return '127.0.0.1';
 }
 
 // Função para obter informações de localização
 async function getLocationInfo(ip: string) {
-    // Se for IP localhost, retorna informações padrão
     if (ip === '127.0.0.1') {
         return {
             country: 'Desconhecido',
@@ -50,7 +44,6 @@ async function getLocationInfo(ip: string) {
     }
 
     try {
-        // Tenta primeiro o ipapi.co
         const response = await fetch(`https://ipapi.co/${ip}/json/`, { 
             headers: {
                 'User-Agent': 'PDFTracker/1.0'
@@ -58,7 +51,6 @@ async function getLocationInfo(ip: string) {
         });
 
         if (!response.ok) {
-            // Se falhar, tenta um serviço alternativo
             const backupResponse = await fetch(`https://ip-api.com/json/${ip}`);
             if (!backupResponse.ok) {
                 throw new Error('Falha na obtenção de localização');
@@ -104,14 +96,8 @@ export async function GET(
         // Extrair IP do cliente
         const ip = extractClientIP(request);
 
-        // Log para depuração
-        console.log('IP extraído:', ip);
-
         // Obter informações de localização
         const locationInfo = await getLocationInfo(ip);
-
-        // Log para depuração
-        console.log('Informações de localização:', locationInfo);
 
         // Buscar informações do documento
         const { data: document, error } = await supabase
@@ -125,7 +111,7 @@ export async function GET(
         }
 
         // Registrar download
-        const { error: logError } = await supabase
+        await supabase
             .from('document_access_logs')
             .insert({
                 document_id: id,
@@ -138,11 +124,6 @@ export async function GET(
                 longitude: locationInfo.longitude,
                 access_type: 'download'
             });
-
-        // Log de erro de registro
-        if (logError) {
-            console.error('Erro ao registrar log:', logError);
-        }
 
         // Criar PDF usando pdf-lib
         const pdfDoc = await PDFDocument.create();
@@ -183,40 +164,13 @@ export async function GET(
             color: rgb(0, 0, 0),
         });
 
-        // Conteúdo
-        page.drawText('Este documento contém informações importantes.', {
+        // Conteúdo principal do documento (exemplo)
+        page.drawText('Conteúdo do documento', {
             x: 50,
             y: height - 160,
             size: 11,
             font,
             color: rgb(0, 0, 0),
-        });
-
-        page.drawText('Por favor, leia com atenção.', {
-            x: 50,
-            y: height - 180,
-            size: 11,
-            font,
-            color: rgb(0, 0, 0),
-        });
-
-        // Link de rastreamento (texto)
-        const trackingUrlText = `Link de Rastreamento: https://pdf-tracker-navy.vercel.app/api/track/${id}`;
-        page.drawText(trackingUrlText, {
-            x: 50,
-            y: 100,
-            size: 10,
-            font,
-            color: rgb(0, 0, 1),
-        });
-
-        // Rodapé
-        page.drawText(`ID de Rastreamento: ${id}`, {
-            x: 50,
-            y: 50,
-            size: 8,
-            font,
-            color: rgb(0.5, 0.5, 0.5),
         });
 
         // Serializar o PDF
