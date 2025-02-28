@@ -6,9 +6,12 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 // Configuração do Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase URL and Key must be provided');
+}
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export async function GET(request, { params }) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
     try {
         const id = params.id;
 
