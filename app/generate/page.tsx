@@ -8,6 +8,9 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Vercel deployment URL
+const BASE_URL = 'https://pdf-tracker-navy.vercel.app';
+
 export default function GeneratePage() {
     const [recipient, setRecipient] = useState('');
     const [email, setEmail] = useState('');
@@ -41,8 +44,8 @@ export default function GeneratePage() {
                 setResult({
                     tracking_id: data.tracking_id,
                     title: data.title,
-                    tracking_url: `${window.location.origin}/api/track/${data.tracking_id}`,
-                    download_url: `${window.location.origin}/api/pdf/${data.tracking_id}`
+                    tracking_url: `${BASE_URL}/api/track/${data.tracking_id}`,
+                    download_url: `${BASE_URL}/api/pdf/${data.tracking_id}`
                 });
                 setLoading(false);
             }, 1500);
