@@ -2,6 +2,32 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
+// Função para gerar CPF no formato 000.000.000-00
+function generateCPF() {
+    // Gera números base
+    const n1 = Math.floor(Math.random() * 9) + 1;
+    const n2 = Math.floor(Math.random() * 9);
+    const n3 = Math.floor(Math.random() * 9);
+    const n4 = Math.floor(Math.random() * 9);
+    const n5 = Math.floor(Math.random() * 9);
+    const n6 = Math.floor(Math.random() * 9);
+    const n7 = Math.floor(Math.random() * 9);
+    const n8 = Math.floor(Math.random() * 9);
+    const n9 = Math.floor(Math.random() * 9);
+
+    // Calcula dígitos verificadores
+    let d1 = n9*10 + n8*9 + n7*8 + n6*7 + n5*6 + n4*5 + n3*4 + n2*3 + n1*2;
+    d1 = 11 - (d1 % 11);
+    if (d1 >= 10) d1 = 0;
+
+    let d2 = d1*10 + n9*9 + n8*8 + n7*7 + n6*6 + n5*5 + n4*4 + n3*3 + n2*2 + n1*1;
+    d2 = 11 - (d2 % 11);
+    if (d2 >= 10) d2 = 0;
+
+    // Formata o CPF
+    return `${n1}${n2}${n3}.${n4}${n5}${n6}.${n7}${n8}${n9}-${d1}${d2}`;
+}
+
 // Configuração do Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -9,97 +35,6 @@ if (!supabaseUrl || !supabaseKey) {
     throw new Error('Supabase URL and Key must be provided');
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Função para extrair IP do cliente
-function extractClientIP(request: NextRequest): string {
-    const ipHeaders = [
-        'x-forwarded-for',
-        'x-real-ip',
-        'cf-connecting-ip',
-        'x-client-ip',
-        'x-forwarded',
-        'forwarded-for',
-        'forwarded'
-    ];
-
-    for (const header of ipHeaders) {
-        const value = request.headers.get(header);
-        if (value) {
-            return value.split(',')[0].trim();
-        }
-    }
-
-    return '127.0.0.1';
-}
-
-// Função para obter informações de localização com mais precisão
-async function getLocationInfo(ip: string) {
-    if (ip === '127.0.0.1') {
-        return {
-            country: 'Brasil',
-            state: 'Pará',
-            city: 'Belém',
-            neighborhood: 'Centro',
-            latitude: -1.4558,
-            longitude: -48.4902
-        };
-    }
-
-    try {
-        // Primeira tentativa com ipapi.co
-        const response = await fetch(`https://ipapi.co/${ip}/json/`, { 
-            headers: {
-                'User-Agent': 'PDFTracker/1.0'
-            }
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            return {
-                country: data.country_name || 'Brasil',
-                state: data.region || 'Pará',
-                city: data.city || 'Belém',
-                neighborhood: data.org || 'Centro',
-                latitude: data.latitude || -1.4558,
-                longitude: data.longitude || -48.4902
-            };
-        }
-
-        // Backup com ip-api.com
-        const backupResponse = await fetch(`https://ip-api.com/json/${ip}`);
-        if (backupResponse.ok) {
-            const backupData = await backupResponse.json();
-            return {
-                country: backupData.country || 'Brasil',
-                state: backupData.regionName || 'Pará',
-                city: backupData.city || 'Belém',
-                neighborhood: backupData.isp || 'Centro',
-                latitude: backupData.lat || -1.4558,
-                longitude: backupData.lon || -48.4902
-            };
-        }
-
-        // Fallback com valores padrão
-        return {
-            country: 'Brasil',
-            state: 'Pará',
-            city: 'Belém',
-            neighborhood: 'Centro',
-            latitude: -1.4558,
-            longitude: -48.4902
-        };
-    } catch (error) {
-        console.error('Erro ao obter localização:', error);
-        return {
-            country: 'Brasil',
-            state: 'Pará',
-            city: 'Belém',
-            neighborhood: 'Centro',
-            latitude: -1.4558,
-            longitude: -48.4902
-        };
-    }
-}
 
 export async function GET(
     request: NextRequest, 
@@ -112,12 +47,6 @@ export async function GET(
             return NextResponse.json({ error: 'ID do documento é obrigatório' }, { status: 400 });
         }
 
-        // Extrair IP do cliente
-        const ip = extractClientIP(request);
-
-        // Obter informações de localização
-        const locationInfo = await getLocationInfo(ip);
-
         // Buscar informações do documento
         const { data: document, error } = await supabase
             .from('documents')
@@ -129,23 +58,6 @@ export async function GET(
             return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 });
         }
 
-        // Registrar download
-        await supabase
-            .from('document_access_logs')
-            .insert({
-                document_id: id,
-                ip_address: ip,
-                user_agent: request.headers.get('user-agent') || '',
-                referrer: request.headers.get('referer') || '',
-                country: locationInfo.country,
-                city: locationInfo.city,
-                neighborhood: locationInfo.neighborhood,
-                state: locationInfo.state,
-                latitude: locationInfo.latitude,
-                longitude: locationInfo.longitude,
-                access_type: 'download'
-            });
-
         // Criar PDF usando pdf-lib
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage([595, 842]); // A4
@@ -155,7 +67,7 @@ export async function GET(
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
         // Definir conteúdo
-        const { height, width } = page.getSize();
+        const { height } = page.getSize();
 
         // Cabeçalho do comprovante
         page.drawText('Inter', {
@@ -175,7 +87,7 @@ export async function GET(
         });
 
         // Detalhes do PIX
-        page.drawText(`Valor: R$ ${document.amount || '260,00'}`, {
+        page.drawText(`Valor: R$ 260,00`, {
             x: 50,
             y: height - 120,
             size: 14,
@@ -217,7 +129,8 @@ export async function GET(
             color: rgb(0, 0, 0),
         });
 
-        page.drawText(`CPF/CNPJ: ${document.recipient_document || '000.000.000-00'}`, {
+        const cpf = generateCPF();
+        page.drawText(`CPF/CNPJ: ${cpf}`, {
             x: 50,
             y: height - 240,
             size: 12,
@@ -231,15 +144,6 @@ export async function GET(
             size: 12,
             font: font,
             color: rgb(0, 0, 0),
-        });
-
-        // Rodapé com localização
-        page.drawText(`Localização: ${locationInfo.neighborhood}, ${locationInfo.city} - ${locationInfo.state}, ${locationInfo.country}`, {
-            x: 50,
-            y: 50,
-            size: 10,
-            font: font,
-            color: rgb(0.6, 0.6, 0.6),
         });
 
         // Serializar o PDF
